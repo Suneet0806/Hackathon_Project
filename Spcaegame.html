@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ORBITAL ARC: Systems Online</title>
+    <style>
+        :root {
+            --bg-deep: #050710;
+            --bg-panel: #0e121f;
+            --accent: #00ffcc; 
+            --gold: #ffd700;
+            --danger: #ff3344;
+            --rare: #b300ff; /* Purple for Rare items */
+            --uncommon: #0088ff; /* Blue for Uncommon */
+            --common: #ffffff;
+            --text-dim: #8fa1b3;
+            --font-tech: 'Courier New', Courier, monospace;
+            --font-title: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: #fff;
+            font-family: var(--font-tech);
+            margin: 0; height: 100vh; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+            user-select: none;
+        }
+
+        /* --- AUDIO TOGGLE --- */
+        #audio-toggle {
+            position: absolute; top: 20px; right: 20px; z-index: 200;
+            font-size: 24px; cursor: pointer; opacity: 0.5; transition: 0.3s;
+        }
+        #audio-toggle.active { opacity: 1; text-shadow: 0 0 10px var(--accent); }
+
+        /* --- TITLE SCREEN --- */
+        #title-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #1a2a4a 0%, #000000 100%);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;
+        }
+        .title-hero {
+            font-family: var(--font-title); font-size: 3.5rem; font-weight: 800; letter-spacing: 5px;
+            background: linear-gradient(to right, #fff, var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 255, 204, 0.4); margin-bottom: 20px;
+        }
+        .planet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .planet-card {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--accent); padding: 20px; width: 200px;
+            cursor: pointer; transition: all 0.3s;
+        }
+        .planet-card:hover { background: rgba(0, 255, 204, 0.1); transform: translateY(-5px); box-shadow: 0 0 20px rgba(0, 255, 204, 0.3); }
+
+        /* --- GAME UI --- */
+        #mission-control {
+            display: none; position: relative; width: 950px; height: 650px;
+            background: var(--bg-panel); border: 2px solid var(--accent);
+            box-shadow: 0 0 50px rgba(0,0,0,0.8); border-radius: 8px; overflow: hidden;
+        }
+
+        .top-deck {
+            position: absolute; top: 0; left: 0; width: 100%; height: 50px;
+            background: rgba(0,0,0,0.8); border-bottom: 1px solid var(--accent);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 20px;
+        }
+        
+        .rank-display { font-family: var(--font-title); font-weight: bold; font-size: 1.1rem; color: var(--gold); }
+        
+        canvas { display: block; margin-top: 50px; cursor: crosshair; }
+
+        /* HUD ELEMENTS */
+        #flight-timer {
+            position: absolute; top: 120px; left: 50%; transform: translateX(-50%);
+            font-size: 2.5rem; font-weight: bold; color: rgba(255,255,255,0.1); pointer-events: none;
+        }
+        #flight-timer.active { color: var(--accent); text-shadow: 0 0 15px var(--accent); }
+
+        /* HINT OVERLAYS */
+        .hint-overlay {
+            position: absolute; padding: 10px 20px; border-radius: 4px; font-weight: bold; display: none; pointer-events: none;
+        }
+        #angle-hint {
+            top: 200px; left: 50%; transform: translateX(-50%);
+            border: 2px solid var(--common); color: var(--common); background: rgba(0,0,0,0.8);
+        }
+        #power-hint-marker {
+            position: absolute; bottom: 25px; height: 10px; background: var(--uncommon);
+            box-shadow: 0 0 10px var(--uncommon); opacity: 0.8; pointer-events: none; display: none; z-index: 20;
+        }
+
+        /* CONTROLS */
+        .controls-dock {
+            position: absolute; bottom: 0; width: 100%; height: 100px;
+            background: #0b0f19; border-top: 2px solid var(--accent);
+            display: flex; align-items: center; justify-content: space-around; padding: 0 30px;
+        }
+
+        .slider-group { position: relative; }
+        
+        input[type=range] { -webkit-appearance: none; width: 180px; height: 4px; background: #333; outline: none; }
+        input[type=range]::-webkit-slider-thumb { 
+            -webkit-appearance: none; width: 20px; height: 20px; background: var(--accent); 
+            border-radius: 50%; cursor: pointer; margin-top: -8px; position: relative; z-index: 30;
+        }
+
+        .game-btn {
+            background: transparent; border: 2px solid var(--accent); color: var(--accent);
+            padding: 12px 25px; font-family: var(--font-tech); font-weight: bold;
+            cursor: pointer; text-transform: uppercase; transition: all 0.2s;
+        }
+        .game-btn:hover { background: var(--accent); color: var(--bg-deep); }
+        
+        /* HINT BATTERY */
+        .hint-container { display: flex; flex-direction: column; align-items: center; }
+        .battery-display { display: flex; gap: 4px; margin-bottom: 8px; }
+        .battery-bar { width: 15px; height: 8px; background: #333; border: 1px solid #555; }
+        .battery-bar.active { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+
+        /* MODALS */
+        .modal-overlay { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 50; justify-content: center; align-items: center; }
+        .modal-box { background: var(--bg-panel); border: 2px solid var(--accent); padding: 0; width: 500px; text-align: center; box-shadow: 0 0 50px rgba(0, 255, 204, 0.2); }
+        .modal-header { padding: 15px; border-bottom: 1px solid var(--accent); color: var(--accent); font-size: 1.2rem; font-weight: bold; }
+        .modal-body { padding: 30px; color: var(--text-dim); }
+
+        /* Loot Rarity Colors for Modal */
+        .loot-common { color: var(--common); border-color: var(--common); }
+        .loot-uncommon { color: var(--uncommon); border-color: var(--uncommon); }
+        .loot-rare { color: var(--rare); border-color: var(--rare); }
+
+    </style>
+</head>
+<body>
+
+    <div id="audio-toggle" onclick="toggleAudio()">🔇</div>
+
+    <div id="title-screen">
+        <div class="title-hero">ORBITAL ARC</div>
+        <div class="planet-grid">
+            <div class="planet-card" onclick="selectPlanet(0)"><div class="planet-name">EARTH</div><div style="font-size:0.8rem">Training (g=10.0)</div></div>
+            <div class="planet-card" onclick="selectPlanet(1)"><div class="planet-name">LUNA</div><div style="font-size:0.8rem">Vacuum (g=1.6)</div></div>
+            <div class="planet-card" onclick="selectPlanet(2)"><div class="planet-name">MARS</div><div style="font-size:0.8rem">Storms (g=3.7)</div></div>
+            <div class="planet-card" onclick="selectPlanet(3)"><div class="planet-name">TITAN</div><div style="font-size:0.8rem">Heavy (g=1.35)</div></div>
+        </div>
+    </div>
+
+    <div id="mission-control">
+        <div class="top-deck">
+            <div>RANK: <span id="ui-rank" class="rank-display">CADET</span></div>
+            <div style="color:var(--warn)">STREAK: <span id="ui-streak">0</span> 🔥</div>
+            <button onclick="location.reload()" style="background:none; border:1px solid #555; color:#555; cursor:pointer;">EXIT</button>
+        </div>
+
+        <canvas id="gameCanvas" width="950" height="500"></canvas>
+        
+        <div id="flight-timer">T+ 00.00s</div>
+        <div id="angle-hint" class="hint-overlay">AIM HIGHER</div>
+
+        <div class="controls-dock">
+            <div class="slider-group">
+                <div style="color:var(--accent); font-size:0.8rem;">ANGLE: <span id="val-angle">45</span>°</div>
+                <input type="range" id="inp-angle" min="0" max="90" value="45">
+            </div>
+            
+            <div class="slider-group" id="power-container">
+                <div style="color:var(--accent); font-size:0.8rem;">FORCE: <span id="val-force">80</span> MN</div>
+                <div id="power-hint-marker"></div> 
+                <input type="range" id="inp-force" min="10" max="150" value="80">
+            </div>
+            
+            <div class="hint-container">
+                <div class="battery-display">
+                    <div class="battery-bar active"></div><div class="battery-bar active"></div><div class="battery-bar active"></div>
+                </div>
+                <button class="game-btn" id="btn-hint" onclick="openHint()">HACK SYSTEM</button>
+            </div>
+            <button class="game-btn" id="btn-launch" style="border-color:var(--danger); color:white;" onclick="fireProjectile()">LAUNCH</button>
+        </div>
+    </div>
+
+    <div id="modal-hint" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">SECURITY BYPASS</div>
+            <div class="modal-body">
+                <div id="hint-difficulty" style="color:var(--warn); font-size:0.8rem; margin-bottom:10px;">SECURITY LEVEL 1</div>
+                <p id="hint-q" style="font-size:1.1rem; color:#fff;">...</p>
+                <input type="number" id="hint-ans" placeholder="?" style="background:#000; border:1px solid #555; color:white; padding:10px; width:100px; font-size:1.2rem; text-align:center;">
+                <div id="hint-feedback" style="height:25px; margin:10px 0; font-weight:bold;"></div>
+                <button class="game-btn" onclick="submitHint()">DECRYPT</button>
+                <button class="game-btn" style="border-color:#555; color:#777" onclick="closeHint()">CANCEL</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-report" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header" id="report-title">STATUS</div>
+            <div class="modal-body">
+                <p id="report-msg">Analysis...</p>
+                <button class="game-btn" onclick="closeReport()">NEXT MISSION</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    /* --- AUDIO ENGINE --- */
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let audioEnabled = false;
+
+    const sfx = {
+        playTone: (freq, type, duration) => {
+            if (!audioEnabled) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        },
+        click: () => sfx.playTone(800, 'square', 0.1),
+        hover: () => sfx.playTone(400, 'sine', 0.05),
+        win: () => { 
+            if(!audioEnabled) return;
+            [440, 554, 659, 880].forEach((f, i) => setTimeout(() => sfx.playTone(f, 'triangle', 0.3), i*100));
+        },
+        lose: () => sfx.playTone(150, 'sawtooth', 0.5),
+        launch: () => {
+            if(!audioEnabled) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + 1);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 1);
+        }
+    };
+
+    function toggleAudio() {
+        audioEnabled = !audioEnabled;
+        if(audioEnabled && audioCtx.state === 'suspended') audioCtx.resume();
+        document.getElementById('audio-toggle').innerText = audioEnabled ? "🔊" : "🔇";
+        document.getElementById('audio-toggle').classList.toggle('active', audioEnabled);
+        sfx.click();
+    }
+
+    /* --- GAME LOGIC --- */
+    const PLANETS = [
+        { name: "EARTH", accent: "#00ffcc", g: 10, ground: '#00ffcc' }, 
+        { name: "LUNA", accent: "#aaaaaa", g: 1.6, ground: '#aaaaaa' },
+        { name: "MARS", accent: "#ff5533", g: 3.7, ground: '#cc4422' },
+        { name: "TITAN", accent: "#dddd55", g: 1.35, ground: '#bbbb44' }
+    ];
+
+    const RANKS = ["CADET", "OFFICER", "COMMANDER", "CAPTAIN", "ADMIRAL", "LEGEND"];
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let gameState = {
+        active: false, planet: null,
+        projectile: { x: 0, y: 0, vx: 0, vy: 0 },
+        target: { x: 0, y: 0, r: 30 },
+        isFlying: false, flightTime: 0,
+        stars: [],
+        streak: 0, totalWins: 0, hintsRemaining: 3,
+        // Hint State
+        activeHintType: null // 'TRAJECTORY', 'ANGLE_ASSIST', 'POWER_ZONE'
+    };
+
+    // --- MATH GENERATOR (ADAPTIVE DIFFICULTY) ---
+    function generateMathProblem() {
+        // Difficulty scales with streak (0-3: Easy, 3-6: Med, 6+: Hard)
+        let difficulty = 1;
+        if (gameState.streak > 3) difficulty = 2;
+        if (gameState.streak > 6) difficulty = 3;
+
+        document.getElementById('hint-difficulty').innerText = `SECURITY LEVEL ${difficulty}`;
+
+        if (difficulty === 1) {
+            // Simple Algebra
+            let a = Math.floor(Math.random() * 10) + 2;
+            let b = Math.floor(Math.random() * 20) + 5;
+            return { q: `Solve: ${a}x = ${a*b}. x?`, a: b };
+        } else if (difficulty === 2) {
+            // Basic Physics
+            let g = 10;
+            let t = Math.floor(Math.random() * 4) + 2; // Time
+            // V = g*t
+            return { q: `Velocity after ${t}s freefall (g=10)?`, a: g*t };
+        } else {
+            // Complex Physics
+            let v = Math.floor(Math.random() * 5 + 2) * 10;
+            let sin30 = 0.5;
+            return { q: `Vertical Vy if V=${v} at 30°?`, a: v * sin30 };
+        }
+    }
+    let currentMath = null;
+
+    // --- MAIN FUNCTIONS ---
+    function selectPlanet(index) {
+        sfx.click();
+        gameState.planet = PLANETS[index];
+        document.getElementById('title-screen').style.display = 'none';
+        document.getElementById('mission-control').style.display = 'block';
+        document.documentElement.style.setProperty('--accent', gameState.planet.accent);
+        initLevel();
+    }
+
+    function initLevel() {
+        gameState.stars = Array(100).fill().map(() => ({x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2}));
+        resetRound();
+        
+        // Listeners
+        document.getElementById('inp-angle').addEventListener('input', updateUI);
+        document.getElementById('inp-force').addEventListener('input', updateUI);
+        
+        // SFX Listeners
+        document.querySelectorAll('button').forEach(b => b.addEventListener('mouseenter', sfx.hover));
+        
+        updateProgressionUI();
+        requestAnimationFrame(gameLoop);
+    }
+
+    function resetRound() {
+        gameState.isFlying = false;
+        gameState.projectile.x = 50; gameState.projectile.y = canvas.height - 20;
+        gameState.activeHintType = null;
+        
+        // Hide Hints
+        document.getElementById('angle-hint').style.display = 'none';
+        document.getElementById('power-hint-marker').style.display = 'none';
+
+        gameState.target.x = 250 + Math.random() * (canvas.width - 300);
+        updateUI();
+    }
+
+    function updateUI() {
+        document.getElementById('val-angle').innerText = document.getElementById('inp-angle').value;
+        document.getElementById('val-force').innerText = document.getElementById('inp-force').value;
+    }
+
+    function updateProgressionUI() {
+        // Hint Battery
+        document.querySelectorAll('.battery-bar').forEach((b, i) => {
+            b.classList.toggle('active', i < gameState.hintsRemaining);
+        });
+        const btn = document.getElementById('btn-hint');
+        if(gameState.hintsRemaining <= 0) { btn.classList.add('disabled'); btn.innerText = "OFFLINE"; }
+        else { btn.classList.remove('disabled'); btn.innerText = "HACK SYSTEM"; }
+
+        // Rank
+        document.getElementById('ui-streak').innerText = gameState.streak;
+        let rIdx = Math.min(Math.floor(gameState.totalWins / 3), RANKS.length - 1);
+        document.getElementById('ui-rank').innerText = RANKS[rIdx];
+    }
+
+    function fireProjectile() {
+        if (gameState.isFlying) return;
+        sfx.launch();
+        const a = parseInt(document.getElementById('inp-angle').value) * (Math.PI/180);
+        const f = parseInt(document.getElementById('inp-force').value);
+        gameState.projectile.vx = f * Math.cos(a);
+        gameState.projectile.vy = -f * Math.sin(a);
+        gameState.isFlying = true;
+        document.getElementById('flight-timer').classList.add('active');
+    }
+
+    function update() {
+        if (!gameState.isFlying) return;
+        const dt = 1/60; gameState.flightTime += dt;
+        document.getElementById('flight-timer').innerText = "T+ " + gameState.flightTime.toFixed(2) + "s";
+        
+        gameState.projectile.vy += gameState.planet.g * dt * 4; // gravity scaling
+        gameState.projectile.x += gameState.projectile.vx * dt * 4;
+        gameState.projectile.y += gameState.projectile.vy * dt * 4;
+
+        // Collision
+        const dx = gameState.projectile.x - gameState.target.x;
+        const dy = gameState.projectile.y - (canvas.height - 20);
+        
+        if (Math.abs(dx) < 30 && Math.abs(dy) < 30) endRound(true);
+        else if (gameState.projectile.y > canvas.height || gameState.projectile.x > canvas.width) endRound(false);
+    }
+
+    function endRound(success) {
+        gameState.isFlying = false;
+        document.getElementById('flight-timer').classList.remove('active');
+        const title = document.getElementById('report-title');
+        const msg = document.getElementById('report-msg');
+
+        if (success) {
+            sfx.win();
+            gameState.streak++; gameState.totalWins++;
+            title.innerText = "MISSION SUCCESS"; title.style.color = "var(--accent)";
+            msg.innerText = "Target Eliminated. Rank Progress +1.";
+            
+            // Streak Reward
+            if(gameState.streak % 3 === 0 && gameState.hintsRemaining < 3) gameState.hintsRemaining++;
+        } else {
+            sfx.lose();
+            gameState.streak = 0;
+            title.innerText = "MISSION FAILED"; title.style.color = "var(--danger)";
+            msg.innerText = "Target Missed. Streak Reset.";
+        }
+        
+        updateProgressionUI();
+        document.getElementById('modal-report').style.display = 'flex';
+    }
+
+    // --- HINT SYSTEM (PROBABILITY LOOT) ---
+    function openHint() {
+        if(gameState.hintsRemaining <= 0) return;
+        sfx.click();
+        currentMath = generateMathProblem();
+        document.getElementById('hint-q').innerText = currentMath.q;
+        document.getElementById('hint-ans').value = "";
+        document.getElementById('hint-feedback').innerText = "";
+        document.getElementById('modal-hint').style.display = 'flex';
+    }
+
+    function submitHint() {
+        let val = parseFloat(document.getElementById('hint-ans').value);
+        if(val === currentMath.a) {
+            sfx.win();
+            gameState.hintsRemaining--;
+            rollHintReward(); // DETERMINE WHICH HINT TYPE
+            updateProgressionUI();
+            closeHint();
+        } else {
+            sfx.lose();
+            document.getElementById('hint-feedback').innerText = "ACCESS DENIED";
+            document.getElementById('hint-feedback').style.color = "var(--danger)";
+        }
+    }
+
+    function rollHintReward() {
+        // Probability: 50% Common, 35% Uncommon, 15% Rare
+        let rand = Math.random();
+        let modalH = document.querySelector('.modal-header'); // Flash color based on rarity
+
+        if (rand < 0.15) {
+            // RARE: TRAJECTORY
+            gameState.activeHintType = 'TRAJECTORY';
+            showToast("REWARD: TRAJECTORY COMPUTER (RARE)", "var(--rare)");
+        } else if (rand < 0.50) {
+            // UNCOMMON: POWER ZONE
+            gameState.activeHintType = 'POWER_ZONE';
+            activatePowerHint();
+            showToast("REWARD: POWER OPTIMIZER (UNCOMMON)", "var(--uncommon)");
+        } else {
+            // COMMON: AIM ASSIST
+            gameState.activeHintType = 'ANGLE_ASSIST';
+            activateAngleHint();
+            showToast("REWARD: AIM ASSIST (COMMON)", "var(--common)");
+        }
+    }
+
+    function showToast(msg, color) {
+        // Using flight timer space for toast msg temporarily
+        let ft = document.getElementById('flight-timer');
+        let oldText = ft.innerText;
+        ft.innerText = msg;
+        ft.style.color = color;
+        setTimeout(() => { ft.innerText = "T+ 00.00s"; ft.style.color = "rgba(255,255,255,0.1)"; }, 3000);
+    }
+
+    // --- HINT VISUALIZATIONS ---
+    function activateAngleHint() {
+        // Calculate ideal angle for current power
+        // Very rough approximation logic for game feel
+        let dx = gameState.target.x - 50;
+        let el = document.getElementById('angle-hint');
+        
+        // Simple heuristic: If target is far (>600) and angle < 30, Aim Higher
+        let currentAng = parseInt(document.getElementById('inp-angle').value);
+        let ideal = 45; // Base
+        
+        // Dynamic hint logic
+        if (dx > 600) ideal = 35; 
+        if (dx < 300) ideal = 60;
+
+        el.style.display = 'block';
+        if (currentAng < ideal) el.innerText = "AIM HIGHER";
+        else el.innerText = "AIM LOWER";
+        el.style.borderColor = "var(--common)";
+        el.style.color = "var(--common)";
+    }
+
+    function activatePowerHint() {
+        // Highlight a range on the slider bar
+        // Physics: d = (v^2 * sin(2theta)) / g
+        // We need v. v = sqrt(d * g / sin(2theta))
+        let theta = parseInt(document.getElementById('inp-angle').value) * (Math.PI/180);
+        let d = gameState.target.x - 50;
+        let g = gameState.planet.g * 4; // Scaling factor from update loop
+        let v_req = Math.sqrt((d * g) / Math.sin(2 * theta));
+        
+        // Map v_req to slider width (approx)
+        // Slider is 10-150. width 180px.
+        let sliderW = 180;
+        let range = 150 - 10;
+        let pxPerVal = sliderW / range;
+        let idealPos = (v_req - 10) * pxPerVal;
+        
+        let marker = document.getElementById('power-hint-marker');
+        marker.style.display = 'block';
+        marker.style.left = (idealPos + 20) + "px"; // Offset correction
+        marker.style.width = "30px"; // Give a generous margin
+    }
+
+    function closeHint() { document.getElementById('modal-hint').style.display = 'none'; }
+    function closeReport() { document.getElementById('modal-report').style.display = 'none'; resetRound(); }
+
+    function draw() {
+        ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width, canvas.height);
+        
+        // Planet BG (Stars)
+        ctx.fillStyle = "rgba(255,255,255,0.5)";
+        gameState.stars.forEach(s => { ctx.beginPath(); ctx.arc(s.x,s.y,s.s,0,Math.PI*2); ctx.fill(); });
+
+        // Ground
+        ctx.strokeStyle = gameState.planet.ground; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(0, canvas.height-10); ctx.lineTo(canvas.width, canvas.height-10); ctx.stroke();
+
+        // Target
+        ctx.fillStyle = 'rgba(255, 50, 70, 0.3)'; ctx.strokeStyle = '#ff3344'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(gameState.target.x, canvas.height-20, gameState.target.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+
+        // Projectile
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(gameState.projectile.x, gameState.projectile.y, 5, 0, Math.PI*2); ctx.fill();
+
+        // RARE HINT: TRAJECTORY
+        if (gameState.activeHintType === 'TRAJECTORY' && !gameState.isFlying) drawTrajectory();
+    }
+
+    function drawTrajectory() {
+        ctx.strokeStyle = "var(--rare)"; ctx.setLineDash([5,5]); ctx.lineWidth = 2; ctx.beginPath();
+        let sx = 50, sy = canvas.height-20;
+        let a = parseInt(document.getElementById('inp-angle').value) * (Math.PI/180);
+        let f = parseInt(document.getElementById('inp-force').value);
+        let vx = f * Math.cos(a), vy = -f * Math.sin(a);
+        
+        ctx.moveTo(sx, sy);
+        for(let i=0; i<100; i++) {
+            vy += gameState.planet.g * 4 * (1/60) * 4;
+            sx += vx * (1/60) * 4; sy += vy * (1/60) * 4;
+            ctx.lineTo(sx, sy);
+        }
+        ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    function gameLoop() { 
+        if (gameState.activeHintType === 'ANGLE_ASSIST') activateAngleHint(); // Update real time
+        if (gameState.activeHintType === 'POWER_ZONE') activatePowerHint();   // Update real time
+        
+        if (gameState.isFlying) update(); 
+        draw(); 
+        requestAnimationFrame(gameLoop); 
+    }
+</script>
+</body>
+</html>
